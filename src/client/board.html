@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skrami</title>
+<link rel="icon" href="/icon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#151a20">
+<script>try{var t=localStorage.getItem("skrami:theme");if(t)document.documentElement.classList.add(t)}catch(e){}</script>
+<link rel="stylesheet" href="/app.css">
+<script type="module" src="/board.js"></script>
+</head>
+<body>
+
+<header>
+  <button class="burger" id="burger" aria-label="Menu">☰</button>
+  <div>
+    <span class="title">Skrami</span>
+    <span class="slug">/b/<span id="slugname"></span><input class="slugedit" id="slugedit" aria-label="Board name" hidden></span>
+  </div>
+  <a class="editlink" id="editlink" href="#">edit board</a>
+  <span class="edittools" id="edittools" hidden>
+    <button class="etool save" id="editsave">Save edits</button>
+    <button class="etool" id="editcancel">Cancel edits</button>
+  </span>
+  <div class="spacer"></div>
+  <div class="filterwrap">
+    <button class="chip" id="filterchip">Show: <span id="filterlabel">Everyone</span> <span class="caret">▾</span></button>
+    <div class="menu" id="filtermenu" hidden></div>
+  </div>
+  <div class="presence" id="presence"></div>
+  <div class="sync"><span class="dot" id="syncdot"></span><span id="synclabel">Connecting…</span></div>
+  <button class="moon" id="themetoggle" title="Theme">◐</button>
+</header>
+
+<div class="board"><table id="board"></table></div>
+
+<div class="scrim" id="scrim"></div>
+<nav class="drawer" id="drawer" aria-label="Board menu">
+  <div class="dhead"><span class="dmark">Skrami</span><button class="dclose" id="dclose" aria-label="Close menu">✕</button></div>
+  <div class="dsection">
+    <div class="dlabel">Recent boards</div>
+    <div id="recents"></div>
+    <button class="ditem new" id="newboard">＋ New board</button>
+  </div>
+  <div class="dsection">
+    <div class="dlabel">This board</div>
+    <button class="ditem" id="setpassword"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span id="pwlabel">Set password…</span></button>
+    <button class="ditem" id="exportjson"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>Export JSON</button>
+    <button class="ditem danger" id="deleteboard"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>Delete board…</button>
+  </div>
+  <div class="dfoot"><a href="/">About</a></div>
+</nav>
+
+<div id="popup-root"></div>
+
+</body>
+</html>
