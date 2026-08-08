@@ -84,7 +84,7 @@ export function setTheme(t: string): void {
   applyTheme();
 }
 
-export function applyTheme(): void {
+function applyTheme(): void {
   const t = theme();
   document.documentElement.classList.toggle("dark", t === "dark");
   document.documentElement.classList.toggle("light", t === "light");

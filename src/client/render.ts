@@ -38,7 +38,7 @@ export type RenderCtx = {
   lastSelected: string | null;
 };
 
-export function flowColumns(b: Board, edit?: EditDraft | null): Column[] {
+function flowColumns(b: Board, edit?: EditDraft | null): Column[] {
   return [...(edit?.columns ?? b.columns), { id: "done", name: "Done" }];
 }
 
@@ -50,7 +50,7 @@ export function cellTasks(b: Board, storyId: string, col: string): Task[] {
   return sortByKey(Object.values(b.tasks).filter((t) => t.storyId === storyId && t.column === col));
 }
 
-export function columnEmpty(b: Board, colId: string): boolean {
+function columnEmpty(b: Board, colId: string): boolean {
   return !Object.values(b.tasks).some((t) => t.column === colId);
 }
 
