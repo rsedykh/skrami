@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# tooling output
+.playwright-mcp/
+
+# specs and research
+FEATURES.md
+ARCHITECTURE.md
+handoff.md
+mockups/
+research/
+
+# build & dev output
+node_modules/
+dist/
+.wrangler/
+
+# secrets
+.env
+.dev.vars
+
+# local Claude Code settings
+.claude/settings.local.json

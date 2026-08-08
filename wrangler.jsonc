@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "skrami",
+  "main": "src/server/worker.ts",
+  "compatibility_date": "2026-07-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "BOARD", "class_name": "BoardDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["BoardDO"] }]
+}

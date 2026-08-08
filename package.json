@@ -1,0 +1,25 @@
+{
+  "name": "skrami",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "node build.mjs --dev",
+    "check": "tsc -p src/client && tsc -p src/server",
+    "deploy": "node build.mjs && wrangler deploy"
+  },
+  "dependencies": {
+    "idb": "^8.0.3",
+    "sortablejs": "^1.15.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260804.1",
+    "@types/sortablejs": "^1.15.9",
+    "esbuild": "^0.28.1",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.119.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "workerd"]
+  }
+}
