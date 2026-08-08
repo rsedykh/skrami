@@ -1,9 +1,9 @@
-import { randomSlug } from "../shared/id";
+import { newBoardPath } from "../shared/id";
 import { wireDrawer } from "./drawer";
 import { effectiveDark, recentBoards, setTheme } from "./prefs";
 
 document.getElementById("create")!.addEventListener("click", () => {
-  location.href = `/b/${randomSlug()}`;
+  location.href = newBoardPath();
 });
 document.getElementById("themetoggle")!.addEventListener("click", () => setTheme(effectiveDark() ? "light" : "dark"));
 

@@ -1,10 +1,10 @@
 import Sortable from "sortablejs";
 import { applyOp, defaultBoard } from "../shared/applyOp";
 import { colorFor, colorMap } from "../shared/color";
-import { SLUG_RE, uid } from "../shared/id";
+import { NAME_RE, boardIdFrom, flavorFrom, uid } from "../shared/id";
 import { keyBetween, sortByKey } from "../shared/orderKey";
 import type { Attachment, Board, Envelope, Op, PresenceUser, Task } from "../shared/types";
-import { cacheDel, cacheGet } from "./db";
+import { cacheDel, cacheGet, queueClear } from "./db";
 import { wireDrawer } from "./drawer";
 import { openPasswordDialog, showUnlockGate } from "./password";
 import { openPopup, popupEntity, popupOpen, popupRemoteDelete, popupRemoteUpdate } from "./popup";
@@ -27,20 +27,42 @@ import {
 import { cellTasks, renderBoard, storiesSorted, type EditDraft } from "./render";
 import { Sync, type Status } from "./sync";
 
-const slug = decodeURIComponent(location.pathname.split("/")[2] ?? "");
-if (!SLUG_RE.test(slug)) location.replace("/");
+const seg = (() => {
+  try {
+    return decodeURIComponent(location.pathname.split("/")[2] ?? "");
+  } catch {
+    return "";
+  }
+})();
+const maybeId = boardIdFrom(seg);
+if (!maybeId) {
+  location.replace("/");
+  throw new Error("not a board URL"); // stop the module — nothing below may run for a bad address
+}
+const boardId = maybeId;
+let urlName = flavorFrom(seg); // what the header and address bar show; board.name overrides once known
 
 const $ = (id: string) => document.getElementById(id)!;
 const table = $("board") as HTMLTableElement;
 
-document.title = `${slug} · Skrami`;
-$("slugname").textContent = slug;
-touchRecent(slug);
-wireDrawer(slug);
+$("slugid").textContent = `-${boardId}`;
+wireDrawer(boardId);
 
-let board: Board = defaultBoard(slug);
-let filter = boardFilter(slug);
-let doneDaysView = doneDays(slug);
+// header + tab title + address bar + drawer entry all follow the board name
+function syncName(): void {
+  if (board.name && board.name !== urlName) {
+    urlName = board.name;
+    history.replaceState(null, "", `/b/${urlName}-${boardId}`);
+  }
+  $("slugname").textContent = urlName ? `${urlName}-${boardId}` : boardId;
+  document.title = `${urlName || boardId} · Skrami`;
+  touchRecent(boardId, urlName);
+}
+
+let board: Board = defaultBoard(boardId);
+let filter = boardFilter(boardId);
+let doneDaysView = doneDays(boardId);
+syncName();
 let hoveredCard: string | null = null;
 let hoveredCell: { story: string; col: string } | null = null;
 let dragging = false;
@@ -60,15 +82,17 @@ let userDeleted = false;
 let floatMenu: HTMLElement | null = null;
 let settleUntil = 0; // renders hold off until Sortable's drop animation lands
 
-const sync = new Sync(slug, {
+const sync = new Sync(boardId, {
   onApply(env) {
     applyOp(board, env);
+    if (env.op.t === "board.setName") syncName();
     routeToPopup(env);
     scheduleRender();
   },
   onSnapshot(b, _v, prot) {
     board = b;
     isProtected = prot;
+    syncName();
     updatePwLabel();
     scheduleRender();
     sync.live({ t: "presence", name: myName() });
@@ -82,27 +106,21 @@ const sync = new Sync(slug, {
       s.state === "synced" ? "Synced" : s.state === "syncing" ? "Syncing…" : s.queued ? `Offline (${s.queued} queued)` : "Offline";
   },
   onAuthRequired() {
-    setBoardToken(slug, null);
-    showUnlockGate(slug, (token, password) => {
-      setBoardToken(slug, token);
-      setBoardPassword(slug, password);
+    setBoardToken(boardId, null);
+    showUnlockGate(boardId, (token, password) => {
+      setBoardToken(boardId, token);
+      setBoardPassword(boardId, password);
       isProtected = true;
       updatePwLabel();
       sync.setToken(token);
     });
   },
   onToken(token) {
-    setBoardToken(slug, token);
-    setBoardPassword(slug, token ? pendingPassword : null);
+    setBoardToken(boardId, token);
+    setBoardPassword(boardId, token ? pendingPassword : null);
     pendingPassword = null;
     isProtected = !!token;
     updatePwLabel();
-  },
-  onMoved(newSlug) {
-    void migrateTo(newSlug);
-  },
-  onRenameError() {
-    alert("That board name is taken.");
   },
   onPresence(users) {
     presence = users;
@@ -506,7 +524,7 @@ function commitColRename(): void {
   render();
 }
 
-// ---------- edit-board mode: add/remove columns + slug rename, transactional ----------
+// ---------- edit-board mode: add/remove columns + board rename, transactional ----------
 
 const slugInput = $("slugedit") as HTMLInputElement;
 
@@ -515,14 +533,15 @@ function updateEditControls(): void {
   ($("edittools") as HTMLElement).hidden = !editDraft;
   $("slugname").hidden = !!editDraft;
   slugInput.hidden = !editDraft;
+  $("slugid").hidden = !editDraft; // the immutable id tail stays visible next to the name input
 }
 
 window.addEventListener("resize", scheduleRender); // fair shares are computed in px per render
 
 $("editlink").addEventListener("click", (e) => {
   e.preventDefault();
-  editDraft = { columns: structuredClone(board.columns), slug };
-  slugInput.value = slug;
+  editDraft = { columns: structuredClone(board.columns) };
+  slugInput.value = urlName;
   render();
 });
 
@@ -547,33 +566,13 @@ $("editsave").addEventListener("click", () => {
     if (board.columns[i]?.id !== d.id) emit({ t: "col.move", id: d.id, index: i });
   });
   render();
-  const newSlug = slugInput.value.trim();
-  if (newSlug && newSlug !== slug) {
-    if (!SLUG_RE.test(newSlug)) alert("Board names can use lowercase letters, digits and hyphens.");
-    else if (!sync.live({ t: "rename", slug: newSlug })) alert("You're offline — reconnect to rename the board.");
+  // renaming is an ordinary op — the id never changes, so nothing moves and it works offline
+  const newName = slugInput.value.trim().replace(new RegExp(`-?${boardId}$`), ""); // tolerate a pasted full address
+  if (newName && newName !== urlName) {
+    if (!NAME_RE.test(newName)) alert("Board names can use lowercase letters, digits and hyphens.");
+    else emit({ t: "board.setName", name: newName });
   }
 });
-
-async function migrateTo(newSlug: string): Promise<void> {
-  if (leaving) return;
-  leaving = true;
-  // move only what this device still has — a sibling tab may have migrated already,
-  // and copying an absent key would clobber the value it just moved
-  const token = boardToken(slug);
-  if (token) setBoardToken(newSlug, token);
-  const password = boardPassword(slug);
-  if (password) setBoardPassword(newSlug, password);
-  if (filter) setBoardFilter(newSlug, filter);
-  if (doneDaysView) setDoneDays(newSlug, doneDaysView);
-  setBoardToken(slug, null);
-  setBoardPassword(slug, null);
-  setBoardFilter(slug, "");
-  setDoneDays(slug, 0);
-  dropRecent(slug);
-  touchRecent(newSlug);
-  await cacheDel(slug);
-  location.replace(`/b/${newSlug}`);
-}
 
 // ---------- table interactions ----------
 
@@ -720,7 +719,7 @@ document.addEventListener("keydown", (e) => {
 
 function setFilter(name: string): void {
   filter = name;
-  setBoardFilter(slug, name);
+  setBoardFilter(boardId, name);
   render();
 }
 
@@ -760,7 +759,7 @@ function openDoneMenu(btn: HTMLElement): void {
     b.textContent = label;
     b.onclick = () => {
       doneDaysView = days;
-      setDoneDays(slug, days);
+      setDoneDays(boardId, days);
       closeFloatMenu();
       render();
     };
@@ -831,7 +830,7 @@ $("themetoggle").addEventListener("click", () => setTheme(effectiveDark() ? "lig
 $("setpassword").addEventListener("click", () => {
   openPasswordDialog({
     isProtected,
-    currentPassword: boardPassword(slug),
+    currentPassword: boardPassword(boardId),
     onSet(password) {
       pendingPassword = password;
       return sync.live({ t: "setPassword", password });
@@ -846,7 +845,7 @@ $("exportjson").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(board, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `skrami-${slug}-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `skrami-${urlName ? `${urlName}-` : ""}${boardId}-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(a.href);
 });
@@ -861,18 +860,20 @@ $("deleteboard").addEventListener("click", () => {
 async function leaveBoard(message?: string): Promise<void> {
   if (leaving) return;
   leaving = true;
-  await cacheDel(slug);
-  dropRecent(slug);
-  setBoardToken(slug, null);
-  setBoardPassword(slug, null);
+  await cacheDel(boardId);
+  await queueClear(boardId);
+  dropRecent(boardId);
+  setBoardToken(boardId, null);
+  setBoardPassword(boardId, null);
   if (message) alert(message);
   location.replace("/");
 }
 
 // ---------- boot ----------
 
-const cached = await cacheGet(slug);
+const cached = await cacheGet(boardId);
 if (cached) board = cached.board;
+syncName();
 render();
-await sync.start(board, cached?.version ?? 0, boardToken(slug));
+await sync.start(board, cached?.version ?? 0, boardToken(boardId));
 if ("serviceWorker" in navigator) void navigator.serviceWorker.register("/sw.js");

@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { applyOp, defaultBoard } from "../shared/applyOp";
-import { SLUG_RE } from "../shared/id";
+import { NAME_RE } from "../shared/id";
 import { ATTACHMENTS_MAX, NOTE_MAX } from "../shared/types";
 import type { Board, ClientMsg, Envelope, PresenceUser, ServerMsg } from "../shared/types";
 
@@ -10,15 +10,8 @@ const KEEP_SNAPSHOTS = 30;
 const FREE_ATTEMPTS = 3;
 const PBKDF2_ITERATIONS = 10_000;
 
-type Attachment = { slug: string; helloed: boolean; cid?: string; name?: string; editing?: string | null };
+type Attachment = { id: string; helloed: boolean; cid?: string; name?: string; editing?: string | null };
 type Auth = { hash: string; salt: string; token: string };
-type AdoptPayload = {
-  board: Board;
-  version: number;
-  seqs: Record<string, number>;
-  auth: Auth | null;
-  snapshots: { day: string; data: string }[];
-};
 
 export class BoardDO extends DurableObject<Env> {
   // undefined = not loaded yet; null = nothing stored (board exists only virtually)
@@ -26,7 +19,6 @@ export class BoardDO extends DurableObject<Env> {
   private version = 0;
   private seqs = new Map<string, number>();
   private auth: Auth | null = null;
-  private movedTo: string | null = null;
   private fail = { count: 0, until: 0 };
   private stored = false;
 
@@ -41,14 +33,12 @@ export class BoardDO extends DurableObject<Env> {
       if (req.headers.get("Upgrade") !== "websocket")
         return new Response("Expected WebSocket", { status: 426 });
       const pair = new WebSocketPair();
-      const slug = path.split("/")[2];
-      pair[1].serializeAttachment({ slug, helloed: false } satisfies Attachment);
+      const id = path.split("/")[2];
+      pair[1].serializeAttachment({ id, helloed: false } satisfies Attachment);
       this.ctx.acceptWebSocket(pair[1]);
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     if (path.endsWith("/auth") && req.method === "POST") return this.handleAuth(req);
-    // /adopt is unreachable from outside: the worker forwards only /ws and /auth
-    if (path === "/adopt" && req.method === "POST") return this.handleAdopt(req);
     return new Response("Not found", { status: 404 });
   }
 
@@ -100,63 +90,6 @@ export class BoardDO extends DurableObject<Env> {
     this.send(ws, { t: "token", token: null });
   }
 
-  // ---------- rename ----------
-
-  private async rename(ws: WebSocket, att: Attachment, newSlug: string): Promise<void> {
-    if (!SLUG_RE.test(newSlug) || newSlug === att.slug) return;
-    if (this.board === null && !this.auth) {
-      this.broadcast({ t: "moved", slug: newSlug }); // nothing stored — nothing to move, no stub
-      return;
-    }
-    const board = structuredClone(this.board!);
-    board.slug = newSlug;
-    const payload: AdoptPayload = {
-      board,
-      version: this.version,
-      seqs: Object.fromEntries(this.seqs),
-      auth: this.auth,
-      snapshots: this.stored
-        ? this.ctx.storage.sql
-            .exec("SELECT day, data FROM snapshots")
-            .toArray()
-            .map((r) => ({ day: r.day as string, data: r.data as string }))
-        : [],
-    };
-    const target = this.env.BOARD.get(this.env.BOARD.idFromName(newSlug));
-    const res = await target.fetch("https://do/adopt", { method: "POST", body: JSON.stringify(payload) });
-    if (!res.ok) {
-      this.send(ws, { t: "renameError", reason: "taken" });
-      return;
-    }
-    const sql = this.ctx.storage.sql;
-    sql.exec("DELETE FROM kv");
-    sql.exec("DELETE FROM snapshots");
-    sql.exec("INSERT INTO kv (key, value) VALUES ('movedTo', ?)", newSlug);
-    void this.ctx.storage.deleteAlarm();
-    this.board = null;
-    this.version = 0;
-    this.seqs.clear();
-    this.auth = null;
-    this.movedTo = newSlug;
-    this.broadcast({ t: "moved", slug: newSlug });
-  }
-
-  private async handleAdopt(req: Request): Promise<Response> {
-    this.load();
-    if (this.board !== null || this.auth || this.movedTo) return json({ error: "taken" }, 409);
-    const p = (await req.json()) as AdoptPayload;
-    this.board = p.board;
-    this.version = p.version;
-    this.seqs = new Map(Object.entries(p.seqs));
-    this.auth = p.auth;
-    this.ensureStorage();
-    this.persistBoard();
-    this.persistAuth();
-    for (const s of p.snapshots)
-      this.ctx.storage.sql.exec("INSERT OR REPLACE INTO snapshots (day, data) VALUES (?, ?)", s.day, s.data);
-    return json({ ok: true });
-  }
-
   // ---------- websocket ----------
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
@@ -171,12 +104,7 @@ export class BoardDO extends DurableObject<Env> {
     const att = ws.deserializeAttachment() as Attachment;
 
     if (msg.t === "hello") {
-      if (this.movedTo) {
-        this.send(ws, { t: "moved", slug: this.movedTo });
-        ws.close(4002, "moved");
-        return;
-      }
-      const board = this.board ?? defaultBoard(att.slug);
+      const board = this.board ?? defaultBoard(att.id);
       if (board.deletedAt) {
         this.send(ws, { t: "deleted" });
         ws.close(4001, "deleted");
@@ -191,7 +119,13 @@ export class BoardDO extends DurableObject<Env> {
       const applied = this.applyEnvelopes(board, msg.pending);
       ws.serializeAttachment({ ...att, helloed: true, cid: msg.cid } satisfies Attachment);
       if (applied.length) this.broadcast({ t: "ops", ops: applied, version: this.version }, ws);
-      this.send(ws, { t: "snapshot", board, version: this.version, protected: !!this.auth });
+      this.send(ws, {
+        t: "snapshot",
+        board,
+        version: this.version,
+        protected: !!this.auth,
+        yourSeq: this.seqs.get(msg.cid) ?? 0,
+      });
       this.afterApply(board);
       return;
     }
@@ -200,7 +134,7 @@ export class BoardDO extends DurableObject<Env> {
 
     switch (msg.t) {
       case "ops": {
-        const board = this.board ?? defaultBoard(att.slug);
+        const board = this.board ?? defaultBoard(att.id);
         if (board.deletedAt) {
           this.send(ws, { t: "deleted" });
           ws.close(4001, "deleted");
@@ -216,8 +150,6 @@ export class BoardDO extends DurableObject<Env> {
         return this.setPassword(ws, String(msg.password ?? ""));
       case "removePassword":
         return this.removePassword(ws);
-      case "rename":
-        return this.rename(ws, att, String(msg.slug ?? ""));
       case "presence":
         ws.serializeAttachment({ ...att, name: String(msg.name ?? "").slice(0, 60) } satisfies Attachment);
         this.broadcastPresence();
@@ -291,7 +223,6 @@ export class BoardDO extends DurableObject<Env> {
     this.version = Number(rows.get("version") ?? 0);
     this.seqs = new Map(Object.entries(JSON.parse(rows.get("seqs") ?? "{}")));
     this.auth = JSON.parse(rows.get("auth") ?? "null");
-    this.movedTo = rows.get("movedTo") ?? null;
     this.fail = JSON.parse(rows.get("authFail") ?? '{"count":0,"until":0}');
     this.stored = true;
   }
@@ -389,7 +320,10 @@ function sanitizeOp(env: Envelope): void {
     note?: unknown;
     attachments?: unknown[];
     key?: unknown;
+    name?: unknown;
   };
+  if (op.t === "board.setName" && (typeof op.name !== "string" || !NAME_RE.test(op.name)))
+    throw new Error("bad name"); // names become URLs — reject instead of clamping
   if (typeof op.key === "string") op.key = op.key.trim().slice(0, 100);
   if (op.set) {
     if (typeof op.set.note === "string") op.set.note = op.set.note.slice(0, NOTE_MAX);

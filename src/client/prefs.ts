@@ -15,60 +15,62 @@ export function setMyName(name: string): void {
   localStorage.setItem("skrami:name", name);
 }
 
-export type RecentBoard = { slug: string };
+export type RecentBoard = { id: string; name: string };
 
 export function recentBoards(): RecentBoard[] {
   try {
-    return JSON.parse(localStorage.getItem("skrami:recent") ?? "[]");
+    const list = JSON.parse(localStorage.getItem("skrami:recent") ?? "[]") as RecentBoard[];
+    return list.filter((r) => typeof r?.id === "string" && r.id);
   } catch {
     return [];
   }
 }
 
-export function touchRecent(slug: string): void {
-  const rest = recentBoards().filter((r) => r.slug !== slug);
-  localStorage.setItem("skrami:recent", JSON.stringify([{ slug }, ...rest].slice(0, 8)));
+// also the rename hook: re-touching with a new name updates the drawer entry
+export function touchRecent(id: string, name: string): void {
+  const rest = recentBoards().filter((r) => r.id !== id);
+  localStorage.setItem("skrami:recent", JSON.stringify([{ id, name }, ...rest].slice(0, 8)));
 }
 
-export function dropRecent(slug: string): void {
-  localStorage.setItem("skrami:recent", JSON.stringify(recentBoards().filter((r) => r.slug !== slug)));
+export function dropRecent(id: string): void {
+  localStorage.setItem("skrami:recent", JSON.stringify(recentBoards().filter((r) => r.id !== id)));
 }
 
-export function boardToken(slug: string): string | null {
-  return localStorage.getItem(`skrami:token:${slug}`);
+export function boardToken(id: string): string | null {
+  return localStorage.getItem(`skrami:token:${id}`);
 }
 
-export function setBoardToken(slug: string, token: string | null): void {
-  if (token) localStorage.setItem(`skrami:token:${slug}`, token);
-  else localStorage.removeItem(`skrami:token:${slug}`);
+export function setBoardToken(id: string, token: string | null): void {
+  if (token) localStorage.setItem(`skrami:token:${id}`, token);
+  else localStorage.removeItem(`skrami:token:${id}`);
 }
 
-export function boardPassword(slug: string): string {
-  return localStorage.getItem(`skrami:pw:${slug}`) ?? "";
+export function boardPassword(id: string): string {
+  return localStorage.getItem(`skrami:pw:${id}`) ?? "";
 }
 
-export function setBoardPassword(slug: string, password: string | null): void {
-  if (password) localStorage.setItem(`skrami:pw:${slug}`, password);
-  else localStorage.removeItem(`skrami:pw:${slug}`);
+export function setBoardPassword(id: string, password: string | null): void {
+  if (password) localStorage.setItem(`skrami:pw:${id}`, password);
+  else localStorage.removeItem(`skrami:pw:${id}`);
 }
 
 // Done-column view: 0 = show all, otherwise "last N days"
-export function doneDays(slug: string): number {
-  return Number(localStorage.getItem(`skrami:done:${slug}`) ?? 0);
+export function doneDays(id: string): number {
+  return Number(localStorage.getItem(`skrami:done:${id}`) ?? 0);
 }
 
-export function setDoneDays(slug: string, days: number): void {
-  if (days) localStorage.setItem(`skrami:done:${slug}`, String(days));
-  else localStorage.removeItem(`skrami:done:${slug}`);
+export function setDoneDays(id: string, days: number): void {
+  if (days) localStorage.setItem(`skrami:done:${id}`, String(days));
+  else localStorage.removeItem(`skrami:done:${id}`);
 }
 
-export function boardFilter(slug: string): string {
-  return localStorage.getItem(`skrami:filter:${slug}`) ?? "";
+export function boardFilter(id: string): string {
+  return localStorage.getItem(`skrami:filter:${id}`) ?? "";
 }
 
-export function setBoardFilter(slug: string, name: string): void {
-  if (name) localStorage.setItem(`skrami:filter:${slug}`, name);
-  else localStorage.removeItem(`skrami:filter:${slug}`);
+export function setBoardFilter(id: string, name: string): void {
+  if (name) localStorage.setItem(`skrami:filter:${id}`, name);
+  else localStorage.removeItem(`skrami:filter:${id}`);
 }
 
 // theme: "" = follow system, "dark" | "light" = per-device override

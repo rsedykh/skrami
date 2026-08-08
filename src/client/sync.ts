@@ -1,5 +1,5 @@
 import type { Board, ClientMsg, Envelope, Op, PresenceUser, ServerMsg } from "../shared/types";
-import { cachePut, nextSeq, queueDel, queueList, queuePut, type QueueRow } from "./db";
+import { bumpSeq, cachePut, nextSeq, queueDel, queueList, queuePut, type QueueRow } from "./db";
 import { clientId } from "./prefs";
 
 export type Status = { state: "synced" | "syncing" | "offline"; queued: number };
@@ -11,8 +11,6 @@ export type SyncHandlers = {
   onStatus(s: Status): void;
   onAuthRequired(): void;
   onToken(token: string | null): void;
-  onMoved(slug: string): void;
-  onRenameError(): void;
   onPresence(users: PresenceUser[]): void;
 };
 
@@ -35,16 +33,20 @@ export class Sync {
   readonly cid = clientId();
 
   constructor(
-    private slug: string,
+    private boardId: string,
     private handlers: SyncHandlers,
   ) {}
+
+  get connected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
 
   // replays any queued ops from previous sessions onto the cached board, then connects
   async start(board: Board, version: number, token: string | null): Promise<void> {
     this.board = board;
     this.version = version;
     this.token = token;
-    this.queue = await queueList(this.slug);
+    this.queue = await queueList(this.boardId);
     for (const row of this.queue) {
       this.applied.add(`${row.cid}:${row.seq}`);
       this.handlers.onApply(row.env);
@@ -66,9 +68,9 @@ export class Sync {
   async submitBatch(ops: Op[]): Promise<void> {
     const envs: Envelope[] = [];
     for (const op of ops) {
-      const seq = await nextSeq(this.slug);
+      const seq = await nextSeq(this.boardId);
       const env: Envelope = { cid: this.cid, seq, ts: Date.now(), op };
-      const row: QueueRow = { slug: this.slug, cid: this.cid, seq, env };
+      const row: QueueRow = { board: this.boardId, cid: this.cid, seq, env };
       this.applied.add(`${this.cid}:${seq}`);
       this.queue.push(row);
       this.handlers.onApply(env);
@@ -100,13 +102,12 @@ export class Sync {
     clearTimeout(this.reconnectTimer);
     this.pushStatus("syncing");
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${location.host}/b/${this.slug}/ws`);
+    const ws = new WebSocket(`${proto}://${location.host}/b/${this.boardId}/ws`);
     this.ws = ws;
     ws.onopen = () => {
       this.helloKeys = this.queue.map((r) => `${r.cid}:${r.seq}`);
       this.send({
         t: "hello",
-        slug: this.slug,
         cid: this.cid,
         token: this.token ?? undefined,
         v: this.version,
@@ -134,11 +135,12 @@ export class Sync {
 
     switch (msg.t) {
       case "snapshot": {
+        void bumpSeq(this.boardId, msg.yourSeq ?? 0);
         // everything sent in the hello is baked into this snapshot — drop it from the queue
         const helloed = new Set(this.helloKeys);
         this.helloKeys = [];
         for (const row of this.queue.filter((r) => helloed.has(`${r.cid}:${r.seq}`)))
-          void queueDel(row.slug, row.cid, row.seq);
+          void queueDel(row.board, row.cid, row.seq);
         this.queue = this.queue.filter((r) => !helloed.has(`${r.cid}:${r.seq}`));
         this.board = msg.board;
         this.version = msg.version;
@@ -155,7 +157,7 @@ export class Sync {
           const key = `${env.cid}:${env.seq}`;
           const mine = this.queue.find((r) => `${r.cid}:${r.seq}` === key);
           if (mine) {
-            void queueDel(mine.slug, mine.cid, mine.seq);
+            void queueDel(mine.board, mine.cid, mine.seq);
             this.queue = this.queue.filter((r) => r !== mine);
           }
           if (!this.applied.has(key)) {
@@ -170,7 +172,6 @@ export class Sync {
           this.helloKeys = this.queue.map((r) => `${r.cid}:${r.seq}`);
           this.send({
             t: "hello",
-            slug: this.slug,
             cid: this.cid,
             token: this.token ?? undefined,
             v: this.version,
@@ -190,12 +191,6 @@ export class Sync {
       case "token":
         this.token = msg.token;
         return this.handlers.onToken(msg.token);
-      case "moved":
-        this.gated = true; // stop reconnecting; the page is about to navigate
-        clearTimeout(this.reconnectTimer);
-        return this.handlers.onMoved(msg.slug);
-      case "renameError":
-        return this.handlers.onRenameError();
       case "presence":
         return this.handlers.onPresence(msg.users);
     }
@@ -237,7 +232,7 @@ export class Sync {
   private saveSoon(): void {
     clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
-      if (this.board) void cachePut(this.slug, { board: this.board, version: this.version });
+      if (this.board) void cachePut(this.boardId, { board: this.board, version: this.version });
     }, 250);
   }
 

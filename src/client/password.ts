@@ -5,13 +5,13 @@ const UNLOCK_ICON =
 
 // Full-page gate: replaces the board entirely until the password checks out.
 // The field is plain text, never masked — a mistyped invisible password locks the team out.
-export function showUnlockGate(slug: string, onUnlocked: (token: string, password: string) => void): void {
+export function showUnlockGate(boardId: string, onUnlocked: (token: string, password: string) => void): void {
   if (document.getElementById("gate")) return;
   const gate = document.createElement("div");
   gate.id = "gate";
   gate.innerHTML = `
     <header>
-      <div><span class="title">Skrami</span> <span class="slug">/b/${slug}</span></div>
+      <div><span class="title">Skrami</span> <span class="slug">${location.pathname}</span></div>
     </header>
     <main class="gate">
       <span class="glock">${LOCK_ICON}</span>
@@ -32,7 +32,7 @@ export function showUnlockGate(slug: string, onUnlocked: (token: string, passwor
     void (async () => {
       const password = input.value;
       if (!password) return;
-      const res = await fetch(`/b/${slug}/auth`, { method: "POST", body: JSON.stringify({ password }) }).catch(
+      const res = await fetch(`/b/${boardId}/auth`, { method: "POST", body: JSON.stringify({ password }) }).catch(
         () => null,
       );
       if (res?.ok) {

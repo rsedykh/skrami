@@ -26,7 +26,7 @@ function hints(note: string, attachments: unknown[]): HTMLElement | null {
   return box;
 }
 
-export type EditDraft = { columns: Column[]; slug: string };
+export type EditDraft = { columns: Column[] };
 
 export type RenderCtx = {
   filter: string;

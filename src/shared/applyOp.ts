@@ -1,8 +1,9 @@
 import type { Board, Envelope, Story, Task } from "./types";
 
-export function defaultBoard(slug: string): Board {
+export function defaultBoard(id: string): Board {
   return {
-    slug,
+    id,
+    name: "",
     columns: [
       { id: "todo", name: "To Do" },
       { id: "inprog", name: "In Progress" },
@@ -12,8 +13,10 @@ export function defaultBoard(slug: string): Board {
     tasks: {},
     createdAt: 0,
     deletedAt: null,
+    ts: {},
   };
 }
+
 
 // The single write path: local edits, remote broadcasts, and the DO all walk this.
 // Ops set absolute values, so replays and duplicates converge; per-field ts gives LWW.
@@ -103,8 +106,16 @@ export function applyOp(b: Board, env: Envelope): void {
       b.columns = b.columns.filter((c) => c.id !== op.id);
       return;
     }
+    case "board.setName": {
+      if (ts < (b.ts.name ?? 0)) return;
+      b.name = op.name;
+      b.ts.name = ts;
+      return;
+    }
     case "board.setKey":
+      if (ts < (b.ts.key ?? 0)) return;
       b.uploadcareKey = op.key || undefined;
+      b.ts.key = ts;
       return;
     case "board.del":
       b.deletedAt = ts;
