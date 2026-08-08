@@ -1,8 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { applyOp, defaultBoard } from "../shared/applyOp";
-import { NAME_RE } from "../shared/id";
-import { ATTACHMENTS_MAX, NOTE_MAX } from "../shared/types";
 import type { Board, ClientMsg, Envelope, PresenceUser, ServerMsg } from "../shared/types";
+import { sanitizeOp } from "./sanitize";
 
 const DAY = 24 * 60 * 60 * 1000;
 const PURGE_AFTER = 30 * DAY;
@@ -176,6 +175,7 @@ export class BoardDO extends DurableObject<Env> {
     if (!Array.isArray(envs)) return applied;
     const now = Date.now();
     for (const env of envs.slice(0, 500)) {
+      if (typeof env.cid !== "string" || !env.cid || env.cid.length > 64) continue;
       const last = this.seqs.get(env.cid) ?? 0;
       if (typeof env.seq !== "number" || env.seq <= last) continue;
       env.ts = Math.min(Number(env.ts) || now, now + 2000);
@@ -317,27 +317,6 @@ export class BoardDO extends DurableObject<Env> {
     }
     this.broadcast({ t: "presence", users });
   }
-}
-
-function sanitizeOp(env: Envelope): void {
-  const op = env.op as {
-    t?: string;
-    set?: Record<string, unknown>;
-    note?: unknown;
-    attachments?: unknown[];
-    key?: unknown;
-    name?: unknown;
-  };
-  if (op.t === "board.setName" && (typeof op.name !== "string" || !NAME_RE.test(op.name)))
-    throw new Error("bad name"); // names become URLs — reject instead of clamping
-  if (typeof op.key === "string") op.key = op.key.trim().slice(0, 100);
-  if (op.set) {
-    if (typeof op.set.note === "string") op.set.note = op.set.note.slice(0, NOTE_MAX);
-    if (typeof op.set.title === "string") op.set.title = op.set.title.slice(0, 2000);
-    if (Array.isArray(op.set.attachments)) op.set.attachments = op.set.attachments.slice(0, ATTACHMENTS_MAX);
-  }
-  if (typeof op.note === "string") op.note = op.note.slice(0, NOTE_MAX);
-  if (Array.isArray(op.attachments)) op.attachments = op.attachments.slice(0, ATTACHMENTS_MAX);
 }
 
 async function hashPassword(password: string, saltB64: string): Promise<string> {
