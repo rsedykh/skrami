@@ -199,6 +199,8 @@ function render(): void {
       animation: 120,
       forceFallback: true, // native HTML5 DnD leaves Chrome's drag image lingering after drop — the card blinks in two places
       fallbackTolerance: 3, // whole cards are handles now; don't let a 1px twitch swallow a click
+      delay: 200,
+      delayOnTouchOnly: true, // touch must hold to drag, or scrolling the board grabs cards
       onStart() {
         dragging = true;
         freezeCols();
@@ -221,6 +223,8 @@ function render(): void {
       handle: ".grip",
       animation: 120,
       forceFallback: true,
+      delay: 200,
+      delayOnTouchOnly: true,
       onMove(evt) {
         const rel = evt.related as HTMLElement;
         if (rel.classList.contains("colhead")) return true;
@@ -247,6 +251,8 @@ function render(): void {
       animation: 120,
       forceFallback: true,
       fallbackTolerance: 3,
+      delay: 200,
+      delayOnTouchOnly: true,
       onStart() {
         dragging = true;
       },
@@ -580,6 +586,9 @@ $("editsave").addEventListener("click", () => {
 
 // ---------- table interactions ----------
 
+// no hover and no reliable dblclick on touch — a plain tap opens the editor there
+const coarse = matchMedia("(pointer: coarse)").matches;
+
 table.addEventListener("click", (e) => {
   const t = e.target as HTMLElement;
   const hadSelection = selected.size > 0;
@@ -591,6 +600,20 @@ table.addEventListener("click", (e) => {
     lastSelected = selected.has(id) ? id : null;
     render();
     return;
+  }
+  if (coarse) {
+    if (card) return openEditTask(card.dataset.id!);
+    const box = t.closest<HTMLElement>(".storybox");
+    if (box) return openEditStory(box.dataset.story!);
+    const th = t.closest<HTMLElement>("th[data-col]");
+    if (th && editDraft && th.dataset.col !== "done") {
+      const c = editDraft.columns.find((x) => x.id === th.dataset.col);
+      if (c) {
+        colRename = { id: c.id, draft: c.name };
+        render();
+        return;
+      }
+    }
   }
   if (selected.size && !card) {
     selected.clear();
