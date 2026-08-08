@@ -260,27 +260,33 @@ export class BoardDO extends DurableObject<Env> {
 
   async alarm(): Promise<void> {
     this.load();
-    if (!this.board) return;
-    if (this.board.deletedAt && Date.now() - this.board.deletedAt > PURGE_AFTER) {
+    if (!this.stored) return;
+    if (this.board?.deletedAt && Date.now() - this.board.deletedAt > PURGE_AFTER) {
       await this.ctx.storage.deleteAll();
       await this.ctx.storage.deleteAlarm();
       this.board = null;
       this.version = 0;
       this.seqs.clear();
       this.auth = null;
+      this.fail = { count: 0, until: 0 };
       this.stored = false;
       return;
     }
-    const sql = this.ctx.storage.sql;
-    sql.exec(
-      "INSERT OR REPLACE INTO snapshots (day, data) VALUES (?, ?)",
-      new Date().toISOString().slice(0, 10),
-      JSON.stringify({ board: this.board, version: this.version }),
-    );
-    sql.exec(
-      "DELETE FROM snapshots WHERE day NOT IN (SELECT day FROM snapshots ORDER BY day DESC LIMIT ?)",
-      KEEP_SNAPSHOTS,
-    );
+    if (this.board) {
+      const sql = this.ctx.storage.sql;
+      sql.exec(
+        "INSERT OR REPLACE INTO snapshots (day, data) VALUES (?, ?)",
+        new Date().toISOString().slice(0, 10),
+        JSON.stringify({ board: this.board, version: this.version }),
+      );
+      sql.exec(
+        "DELETE FROM snapshots WHERE day NOT IN (SELECT day FROM snapshots ORDER BY day DESC LIMIT ?)",
+        KEEP_SNAPSHOTS,
+      );
+    }
+    // reschedule even with no board yet — a board stored by setPassword alone
+    // must keep its chain alive, or ops arriving later never get snapshots
+    // (ensureStorage arms the alarm only once) and a soft delete never purges
     void this.ctx.storage.setAlarm(Date.now() + DAY);
   }
 
