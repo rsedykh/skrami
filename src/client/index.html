@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skrami — instant scrum board</title>
+<link rel="icon" href="/icon.svg">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#151a20">
+<script>try{var t=localStorage.getItem("skrami:theme");if(t)document.documentElement.classList.add(t)}catch(e){}</script>
+<link rel="stylesheet" href="/app.css">
+<script type="module" src="/index.js"></script>
+</head>
+<body>
+
+<header>
+  <button class="burger" id="burger" aria-label="Menu" hidden>☰</button>
+  <div class="spacer"></div>
+  <button class="moon" id="themetoggle" title="Theme">◐</button>
+</header>
+
+<main class="index">
+  <h1 class="bigmark">Skrami</h1>
+  <p class="tagline">An instant, no-signup, sticky-note scrum board — realtime, shared by URL.</p>
+  <button class="createboard" id="create">Create board</button>
+
+  <section>
+    <h2>How it works</h2>
+    <ul>
+      <li>Create board gives you a URL. That URL <em>is</em> the board — anyone with the link sees and edits it, live.</li>
+      <li>Stories are rows; the flow runs To Do → In Progress → Done. Cards are sticky notes, colored by assignee.</li>
+      <li>Changes apply instantly and sync in the background — a bad connection never blocks your work.</li>
+      <li>Boards you've visited are remembered on this device — the ☰ menu gets you back to them.</li>
+    </ul>
+  </section>
+
+  <section class="keys">
+    <h2>Keyboard</h2>
+    <table>
+      <tr class="kgroup"><td colspan="2">With the pointer on a card</td></tr>
+      <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>delete the card (asks first)</td></tr>
+      <tr><td><kbd>E</kbd></td><td>edit</td></tr>
+      <tr><td><kbd>A</kbd></td><td>assign to me</td></tr>
+      <tr><td><kbd>I</kbd></td><td>move to In Progress</td></tr>
+      <tr><td><kbd>D</kbd></td><td>move to Done</td></tr>
+      <tr class="kgroup"><td colspan="2">On the board</td></tr>
+      <tr><td><kbd>C</kbd></td><td>new card in the cell under the pointer</td></tr>
+      <tr><td><kbd>M</kbd></td><td>show only my cards</td></tr>
+      <tr class="kgroup"><td colspan="2">In the card window</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>create (new card)</td></tr>
+      <tr><td><kbd>⌘Enter</kbd> / <kbd>Ctrl+Enter</kbd></td><td>save</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>discard (asks first)</td></tr>
+    </table>
+  </section>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<nav class="drawer" id="drawer" aria-label="Menu">
+  <div class="dhead"><span class="dmark">Skrami</span><button class="dclose" id="dclose" aria-label="Close menu">✕</button></div>
+  <div class="dsection">
+    <div class="dlabel">Recent boards</div>
+    <div id="recents"></div>
+    <button class="ditem new" id="newboard">＋ New board</button>
+  </div>
+</nav>
+
+</body>
+</html>
