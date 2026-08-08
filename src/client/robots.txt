@@ -1,0 +1,4 @@
+# Board pages are private-by-URL and carry <meta name="robots" content="noindex">.
+# Crawling stays allowed — a crawler must be able to fetch the page to see the noindex.
+User-agent: *
+Disallow:
