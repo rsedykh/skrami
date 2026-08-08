@@ -450,6 +450,9 @@ function openEditStory(id: string): void {
     onDelete() {
       emit({ t: "story.del", id });
     },
+    onOpenChange(open) {
+      sync.live({ t: "editing", id: open });
+    },
   });
 }
 

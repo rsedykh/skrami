@@ -171,6 +171,12 @@ export function renderBoard(table: HTMLTableElement, b: Board, ctx: RenderCtx): 
       shint.className = "sclip";
       box.append(shint);
     }
+    const editor = ctx.editing.get(s.id);
+    if (editor) {
+      const badge = el("div", "badge");
+      badge.textContent = `✎ ${editor}`;
+      box.append(badge);
+    }
     td.append(box);
     const plusTd = el("td", "plus");
     plusTd.textContent = "+";
