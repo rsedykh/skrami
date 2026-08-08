@@ -51,7 +51,8 @@ export function applyOp(b: Board, env: Envelope): void {
       return;
     }
     case "task.create": {
-      if (b.tasks[op.id]) return;
+      // a concurrently deleted story/column must not leave an invisible orphan
+      if (b.tasks[op.id] || !b.stories[op.storyId] || !hasColumn(b, op.column)) return;
       b.tasks[op.id] = {
         id: op.id,
         storyId: op.storyId,
@@ -72,6 +73,7 @@ export function applyOp(b: Board, env: Envelope): void {
     case "task.move": {
       const t = b.tasks[op.id];
       if (!t || ts < (t.ts.pos ?? 0)) return;
+      if (!b.stories[op.storyId] || !hasColumn(b, op.column)) return; // target vanished — stay put
       t.doneAt = op.column === "done" ? (t.column === "done" ? t.doneAt : ts) : null;
       t.storyId = op.storyId;
       t.column = op.column;
@@ -121,6 +123,10 @@ export function applyOp(b: Board, env: Envelope): void {
       b.deletedAt = ts;
       return;
   }
+}
+
+function hasColumn(b: Board, id: string): boolean {
+  return id === "done" || b.columns.some((c) => c.id === id);
 }
 
 function setFields(obj: Story | Task | undefined, set: Record<string, unknown>, ts: number): void {
