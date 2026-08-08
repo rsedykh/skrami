@@ -851,17 +851,22 @@ $("exportjson").addEventListener("click", () => {
 });
 
 $("deleteboard").addEventListener("click", () => {
+  // live-only, like password changes — a delete queued offline would just sit
+  // in a queue the exit path wipes, with the user believing the board is gone
+  if (!sync.connected) return alert("You're offline — reconnect to delete the board.");
   if (!confirm("Delete this board? It becomes inaccessible immediately and is permanently removed after 30 days.")) return;
   userDeleted = true;
   emit({ t: "board.del" });
-  setTimeout(() => void leaveBoard(), 1500); // offline fallback — the queued op still lands on next open
+  // normally the server's "deleted" close exits; if the socket died mid-flight,
+  // leave anyway but keep the queue — the op completes on the next open
+  setTimeout(() => void leaveBoard(undefined, true), 1500);
 });
 
-async function leaveBoard(message?: string): Promise<void> {
+async function leaveBoard(message?: string, keepQueue = false): Promise<void> {
   if (leaving) return;
   leaving = true;
   await cacheDel(boardId);
-  await queueClear(boardId);
+  if (!keepQueue) await queueClear(boardId);
   dropRecent(boardId);
   setBoardToken(boardId, null);
   setBoardPassword(boardId, null);
