@@ -363,6 +363,7 @@ function endKey(storyId: string, column: string): string {
 function rememberName(assignee: string): void {
   if (assignee && !myName()) {
     setMyName(assignee);
+    nameInput.value = assignee;
     sync.live({ t: "presence", name: assignee });
   }
 }
@@ -826,6 +827,15 @@ function updatePwLabel(): void {
 }
 
 $("themetoggle").addEventListener("click", () => setTheme(effectiveDark() ? "light" : "dark"));
+
+const nameInput = $("myname") as HTMLInputElement;
+nameInput.value = myName();
+nameInput.addEventListener("change", () => {
+  const name = nameInput.value.trim().slice(0, 60);
+  nameInput.value = name;
+  setMyName(name);
+  sync.live({ t: "presence", name });
+});
 
 $("setpassword").addEventListener("click", () => {
   openPasswordDialog({
