@@ -73,6 +73,17 @@ export function setBoardFilter(id: string, name: string): void {
   else localStorage.removeItem(`skrami:filter:${id}`);
 }
 
+// stories column collapsed to a strip — a device pref: it's about screen width,
+// not about any one board; only takes effect on narrow viewports
+export function storiesCollapsed(): boolean {
+  return localStorage.getItem("skrami:scollapse") === "1";
+}
+
+export function setStoriesCollapsed(on: boolean): void {
+  if (on) localStorage.setItem("skrami:scollapse", "1");
+  else localStorage.removeItem("skrami:scollapse");
+}
+
 // theme: "" = follow system, "dark" | "light" = per-device override
 export function theme(): string {
   return localStorage.getItem("skrami:theme") ?? "";

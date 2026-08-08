@@ -467,9 +467,25 @@ kbd {
 }
 
 /* ---------- adaptive ---------- */
+.stoggle { display: none; } /* mobile-only chrome — desktop has the width */
 @media (max-width: 720px) {
   header { padding: 12px 12px 8px; gap: 10px; }
   td.story { min-width: 128px; }
   .storybox { padding: 14px 8px; font-size: 13px; }
   .pop { top: 10vh; }
+
+  /* collapsed stories: a 34px strip with vertical titles; cards get the width */
+  .stoggle { display: inline; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px 2px 0; }
+  table.scollapsed thead th.stories { width: 34px; min-width: 34px; padding: 12px 4px; text-align: center; }
+  table.scollapsed .stoggle { padding: 2px; }
+  table.scollapsed td.story { min-width: 34px; max-width: 34px; padding: 6px 3px; }
+  table.scollapsed .storybox {
+    writing-mode: vertical-rl;
+    padding: 8px 4px; font-size: 11px;
+    max-height: 132px; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis;
+    margin: 0 auto;
+  }
+  table.scollapsed .storybox .sclip, table.scollapsed .storybox .badge { display: none; }
+  table.scollapsed td.newstory { padding: 12px 4px; }
 }

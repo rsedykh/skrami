@@ -36,6 +36,7 @@ export type RenderCtx = {
   editing: Map<string, string>; // taskId → editor name
   selected: Set<string>;
   lastSelected: string | null;
+  collapseStories: boolean; // narrow-viewport mode: stories shrink to a strip, cards get the width
 };
 
 function flowColumns(b: Board, edit?: EditDraft | null): Column[] {
@@ -78,8 +79,9 @@ export function renderBoard(table: HTMLTableElement, b: Board, ctx: RenderCtx): 
     counts.set(k, n);
     cellMax.set(t.column, Math.max(cellMax.get(t.column) ?? 0, n));
   }
+  table.classList.toggle("scollapsed", ctx.collapseStories);
   const tableW = table.clientWidth || document.documentElement.clientWidth;
-  const storiesW = Math.max(160, 0.125 * tableW);
+  const storiesW = ctx.collapseStories ? 34 : Math.max(160, 0.125 * tableW);
   const avail = tableW - storiesW - 30;
   const fairW = avail / cols.length;
   const cardW = Math.max(CARD_MIN, Math.min(CARD_MAX, Math.floor((fairW - CARD_GAP - CELL_PAD) / 2)));
@@ -106,12 +108,21 @@ export function renderBoard(table: HTMLTableElement, b: Board, ctx: RenderCtx): 
 
   const hr = table.createTHead().insertRow();
   const hs = el("th", "stories col-stories");
-  hs.append("Stories ");
-  const plus = el("span", "plusmini");
-  plus.title = "New story";
-  plus.textContent = "＋";
-  plus.dataset.act = "newstory";
-  hs.append(plus);
+  const tog = el("span", "stoggle");
+  tog.dataset.act = "stoggle";
+  tog.textContent = ctx.collapseStories ? "›" : "‹";
+  tog.title = ctx.collapseStories ? "Expand stories" : "Collapse stories";
+  if (ctx.collapseStories) {
+    hs.style.width = "34px";
+    hs.append(tog);
+  } else {
+    hs.append(tog, "Stories ");
+    const plus = el("span", "plusmini");
+    plus.title = "New story";
+    plus.textContent = "＋";
+    plus.dataset.act = "newstory";
+    hs.append(plus);
+  }
   hr.append(hs, el("th", "plushead"));
   cols.forEach((c, i) => {
     if (i === addcolAt) {
@@ -205,7 +216,8 @@ export function renderBoard(table: HTMLTableElement, b: Board, ctx: RenderCtx): 
   const nf = el("td", "newstory col-stories");
   const a = document.createElement("a");
   a.href = "#";
-  a.textContent = "New Story";
+  a.textContent = ctx.collapseStories ? "＋" : "New Story"; // collapsed click expands first, then opens the input
+  if (ctx.collapseStories) a.title = "New story";
   a.dataset.act = "newstory";
   nf.append(a);
   fr.append(nf, el("td", ""));

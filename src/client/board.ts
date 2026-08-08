@@ -21,7 +21,9 @@ import {
   setBoardToken,
   setDoneDays,
   setMyName,
+  setStoriesCollapsed,
   setTheme,
+  storiesCollapsed,
   touchRecent,
 } from "./prefs";
 import { cellTasks, renderBoard, storiesSorted, type EditDraft } from "./render";
@@ -62,6 +64,14 @@ function syncName(): void {
 let board: Board = defaultBoard(boardId);
 let filter = boardFilter(boardId);
 let doneDaysView = doneDays(boardId);
+let collapsePref = storiesCollapsed();
+// the pref is inert on wide screens — a phone rotated to landscape expands, and
+// the toggle (mobile-only chrome) can never strand a wide viewport collapsed
+const collapseNow = () => collapsePref && innerWidth <= 720;
+function setCollapse(on: boolean): void {
+  collapsePref = on;
+  setStoriesCollapsed(on);
+}
 syncName();
 let hoveredCard: string | null = null;
 let hoveredCell: { story: string; col: string } | null = null;
@@ -187,6 +197,7 @@ function render(): void {
     editing: editingMap(),
     selected,
     lastSelected,
+    collapseStories: collapseNow(),
   });
   rendering = false;
   $("filterlabel").textContent = filter || "Everyone";
@@ -604,7 +615,14 @@ table.addEventListener("click", (e) => {
   if (coarse) {
     if (card) return openEditTask(card.dataset.id!);
     const box = t.closest<HTMLElement>(".storybox");
-    if (box) return openEditStory(box.dataset.story!);
+    if (box) {
+      if (collapseNow()) {
+        setCollapse(false); // a tap on the strip wants to read, not edit
+        render();
+        return;
+      }
+      return openEditStory(box.dataset.story!);
+    }
     const th = t.closest<HTMLElement>("th[data-col]");
     if (th && editDraft && th.dataset.col !== "done") {
       const c = editDraft.columns.find((x) => x.id === th.dataset.col);
@@ -620,8 +638,14 @@ table.addEventListener("click", (e) => {
     lastSelected = null;
     render();
   }
+  if (t.closest("[data-act='stoggle']")) {
+    setCollapse(!collapsePref);
+    render();
+    return;
+  }
   if (t.closest("[data-act='newstory']")) {
     e.preventDefault();
+    if (collapseNow()) setCollapse(false); // the title input needs a real column
     newStoryDraft = "";
     render();
     return;
