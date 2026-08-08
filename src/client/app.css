@@ -42,6 +42,9 @@ header { display: flex; align-items: center; gap: 14px; padding: 14px 18px 12px;
 .burger:hover { color: var(--soft); }
 .title { font-family: "Iowan Old Style", Georgia, "Times New Roman", serif; font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
 .slug { color: var(--muted); font-size: 13px; }
+#slugname { cursor: pointer; }
+#slugname:hover { color: var(--soft); }
+#slugname.copied::after { content: " ✓ copied"; color: var(--ok); font-size: 11px; }
 .spacer { flex: 1; }
 .chip {
   display: inline-flex; align-items: center; gap: 6px;

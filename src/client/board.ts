@@ -828,6 +828,14 @@ function updatePwLabel(): void {
 
 $("themetoggle").addEventListener("click", () => setTheme(effectiveDark() ? "light" : "dark"));
 
+// the address is the share affordance — installed PWAs have no URL bar to copy from
+$("slugname").addEventListener("click", () => {
+  navigator.clipboard.writeText(location.href).then(() => {
+    $("slugname").classList.add("copied");
+    setTimeout(() => $("slugname").classList.remove("copied"), 1200);
+  }, () => {});
+});
+
 const nameInput = $("myname") as HTMLInputElement;
 nameInput.value = myName();
 nameInput.addEventListener("change", () => {
