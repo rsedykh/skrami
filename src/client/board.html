@@ -26,6 +26,27 @@
     <button class="etool" id="editcancel">Cancel edits</button>
   </span>
   <div class="spacer"></div>
+  <div class="keyswrap">
+    <button class="chip" id="keyschip">Keybinds <span class="caret">?</span></button>
+    <!-- mirror of the index page's Keyboard table — keep in sync -->
+    <div class="menu keys" id="keysmenu" hidden>
+      <table>
+        <tr class="kgroup"><td colspan="2">With the pointer on a card</td></tr>
+        <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>delete the card (asks first)</td></tr>
+        <tr><td><kbd>E</kbd></td><td>edit</td></tr>
+        <tr><td><kbd>A</kbd></td><td>assign to me</td></tr>
+        <tr><td><kbd>I</kbd></td><td>move to In Progress</td></tr>
+        <tr><td><kbd>D</kbd></td><td>move to Done</td></tr>
+        <tr class="kgroup"><td colspan="2">On the board</td></tr>
+        <tr><td><kbd>C</kbd></td><td>new card in the cell under the pointer</td></tr>
+        <tr><td><kbd>M</kbd></td><td>show only my cards</td></tr>
+        <tr class="kgroup"><td colspan="2">In the card window</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>create (new card)</td></tr>
+        <tr><td><kbd>⌘Enter</kbd> / <kbd>Ctrl+Enter</kbd></td><td>save</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>discard (asks first)</td></tr>
+      </table>
+    </div>
+  </div>
   <div class="filterwrap">
     <button class="chip" id="filterchip">Show: <span id="filterlabel">Everyone</span> <span class="caret">▾</span></button>
     <div class="menu" id="filtermenu" hidden></div>

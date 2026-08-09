@@ -56,6 +56,10 @@ header { display: flex; align-items: center; gap: 14px; padding: 14px 18px 12px;
 .chip.on { border-color: var(--focus); color: var(--focus); font-weight: 600; }
 .chip .caret { color: var(--muted); font-size: 10px; }
 .filterwrap { position: relative; }
+.keyswrap { position: relative; margin-right: 10px; }
+.keyswrap .menu { padding: 2px 16px 12px; white-space: nowrap; }
+/* shortcuts mean nothing to a finger, and the phone header has no room to spare */
+@media (pointer: coarse) { .keyswrap { display: none; } }
 .menu {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 8;
   min-width: 160px; padding: 5px 0;

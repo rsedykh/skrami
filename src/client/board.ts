@@ -724,9 +724,10 @@ document.addEventListener("keydown", (e) => {
   if (popupOpen() || e.metaKey || e.ctrlKey || e.altKey) return;
   const t = e.target as HTMLElement;
   if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t.isContentEditable) return;
-  if (e.code === "Escape" && (floatMenu || !menu.hidden)) {
+  if (e.code === "Escape" && (floatMenu || !menu.hidden || !keysmenu.hidden)) {
     closeFloatMenu();
     menu.hidden = true;
+    keysmenu.hidden = true;
     return;
   }
   if (e.code === "Escape" && selected.size) {
@@ -774,8 +775,15 @@ function setFilter(name: string): void {
   render();
 }
 
+const keysmenu = $("keysmenu");
+$("keyschip").addEventListener("click", () => {
+  menu.hidden = true;
+  keysmenu.hidden = !keysmenu.hidden;
+});
+
 const menu = $("filtermenu");
 $("filterchip").addEventListener("click", () => {
+  keysmenu.hidden = true;
   if (!menu.hidden) {
     menu.hidden = true;
     return;
@@ -843,6 +851,7 @@ function closeFloatMenu(): void {
 document.addEventListener("mousedown", (e) => {
   const t = e.target as HTMLElement;
   if (!menu.hidden && !t.closest(".filterwrap")) menu.hidden = true;
+  if (!keysmenu.hidden && !t.closest(".keyswrap")) keysmenu.hidden = true;
   if (floatMenu && !t.closest(".menu.float")) closeFloatMenu();
 });
 
