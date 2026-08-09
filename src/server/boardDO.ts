@@ -38,6 +38,7 @@ export class BoardDO extends DurableObject<Env> {
       return new Response(null, { status: 101, webSocket: pair[0] });
     }
     if (path.endsWith("/auth") && req.method === "POST") return this.handleAuth(req);
+    if (path.endsWith("/takedown") && req.method === "POST") return this.handleTakedown(req);
     return new Response("Not found", { status: 404 });
   }
 
@@ -67,6 +68,35 @@ export class BoardDO extends DurableObject<Env> {
       this.fail.until = now + Math.min(2 ** (this.fail.count - FREE_ATTEMPTS), 600) * 1000;
     this.persistFail();
     return json({ error: "wrong" }, 403);
+  }
+
+  // Operator kill-switch (worker already checked ADMIN_KEY). Soft-delete by default —
+  // same semantics as a user delete; {"purge":true} erases storage on the spot instead.
+  private async handleTakedown(req: Request): Promise<Response> {
+    let purge = false;
+    try {
+      purge = !!((await req.json()) as { purge?: boolean }).purge;
+    } catch {}
+    this.load();
+    if (!this.stored) return json({ error: "no such board" }, 404);
+    for (const ws of this.ctx.getWebSockets()) {
+      this.send(ws, { t: "deleted" });
+      ws.close(4001, "deleted");
+    }
+    if (purge || !this.board) {
+      await this.ctx.storage.deleteAll();
+      await this.ctx.storage.deleteAlarm();
+      this.board = null;
+      this.version = 0;
+      this.seqs.clear();
+      this.auth = null;
+      this.fail = { count: 0, until: 0 };
+      this.stored = false;
+      return json({ purged: true });
+    }
+    this.board.deletedAt = Date.now();
+    this.persistBoard();
+    return json({ deleted: true });
   }
 
   private async setPassword(ws: WebSocket, password: string): Promise<void> {

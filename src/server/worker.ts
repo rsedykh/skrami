@@ -5,7 +5,7 @@ export { BoardDO } from "./boardDO";
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
-    const m = url.pathname.match(/^\/b\/([^/]+)(\/(?:ws|auth))?$/);
+    const m = url.pathname.match(/^\/b\/([^/]+)(\/(?:ws|auth|takedown))?$/);
     if (!m) return env.ASSETS.fetch(req);
 
     const [, seg, sub] = m;
@@ -19,6 +19,9 @@ export default {
       if (sub) return new Response("Bad board id", { status: 400 });
       return Response.redirect(new URL("/", url).toString(), 302);
     }
+    // operator kill-switch (abuse/DMCA): inert until the ADMIN_KEY secret is set; 404 hides it from probing
+    if (sub === "/takedown" && (!env.ADMIN_KEY || req.headers.get("authorization") !== `Bearer ${env.ADMIN_KEY}`))
+      return new Response("Not found", { status: 404 });
     if (sub) return env.BOARD.get(env.BOARD.idFromName(id)).fetch(new Request(new URL(`/b/${id}${sub}`, url), req));
     // extensionless: the asset layer 307s "/board.html" away from under us
     return env.ASSETS.fetch(new Request(new URL("/board", url), req));
