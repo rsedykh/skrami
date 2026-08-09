@@ -459,6 +459,7 @@ td.cell.empty:hover::after { content: "+"; color: var(--muted); opacity: .5; fon
 .index h2 { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 12px; }
 .index p, .index li { color: var(--soft); font-size: 14.5px; line-height: 1.65; }
 .index ul { padding-left: 20px; margin: 0; }
+.index a { color: var(--focus); }
 .index li { margin-bottom: 8px; }
 .keys table { border: none; width: auto; }
 .keys td { border: none; padding: 4px 18px 4px 0; font-size: 13.5px; color: var(--soft); vertical-align: top; }

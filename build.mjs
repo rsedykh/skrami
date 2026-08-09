@@ -14,6 +14,7 @@ const options = {
     "src/client/manifest.webmanifest",
     "src/client/icon.svg",
     "src/client/robots.txt",
+    "src/client/llms.txt",
   ],
   bundle: true,
   format: "esm",

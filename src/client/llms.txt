@@ -1,0 +1,198 @@
+# Skrami — agent guide
+
+Skrami (https://skrami.app) is an instant, no-signup, sticky-note scrum board:
+realtime, shared by URL. This file is the wire-protocol reference for AI agents
+and scripts. The whole API is one WebSocket plus one HTTP POST — anything that
+can open a WebSocket can read a board, create and move cards, and appear in
+presence next to the humans.
+
+There are no accounts and no API keys. The board URL is the only credential —
+treat it as a capability and never post it anywhere public. A human shares a
+board with an agent by sharing the URL, nothing else.
+
+There is no REST API. Reading a board = connect, say hello, receive a snapshot.
+Writing = send ops. Both are described below, with copy-paste recipes at the end.
+
+## Boards and URLs
+
+A board lives at:
+
+    https://skrami.app/b/<flavor>-<id>
+
+The id is the final hyphen-separated token: exactly 7 chars from the alphabet
+`abcdefghjkmnpqrstuvwxyz23456789` (no i, l, o, 0, 1). Everything before it is
+"flavor" — a display name the server ignores. `/b/<id>` alone works too.
+
+## Connect
+
+    wss://skrami.app/b/<id>/ws
+
+The first message you send MUST be a hello:
+
+    {"t":"hello","cid":"<your-client-id>","v":0,"pending":[]}
+
+- `cid`: your client identity — any non-empty string ≤ 64 chars. Use a stable
+  one per agent (e.g. "agent-claude-rsedykh") so your op sequence numbers
+  survive across sessions.
+- `v`: the board version you last saw; send 0. The server always replies with
+  a full snapshot regardless.
+- `pending`: ops to apply immediately on connect (see one-shot recipe below);
+  send [] if you have none.
+- On password-protected boards add `"token":"<token>"` (see Passwords).
+
+The server replies:
+
+    {"t":"snapshot","board":{...},"version":N,"protected":false,"yourSeq":S}
+
+`board` is the complete current state (a whole board is a few KB). `yourSeq` is
+the highest op seq the server has ever accepted from your cid — your next op
+must use a seq greater than that. Boards are small; there is no delta protocol.
+
+Other messages the server may send at any time:
+
+    {"t":"ops","ops":[...],"version":N}      // edits by you or others
+    {"t":"presence","users":[{"cid","name","editing"}]}
+    {"t":"authRequired"}                     // then close 4003 — get a token
+    {"t":"deleted"}                          // then close 4001 — board deleted
+
+Keepalive: send the literal string `ping`; the server answers `pong`.
+
+## Board state (what the snapshot contains)
+
+    Board  { id, name, columns: [{id,name}], stories: {id: Story},
+             tasks: {id: Task}, createdAt, deletedAt, ts, uploadcareKey? }
+    Story  { id, title, note, attachments, orderKey, ts }     // a row
+    Task   { id, storyId, column, title, assignee, priority,
+             note, attachments, orderKey, doneAt, ts }        // a sticky note
+
+- Stories are rows; columns run left to right. Column ids `todo` and `inprog`
+  are permanent; `done` is implicit, always last, and never appears in
+  `columns[]` — move a task to column `"done"` to complete it (`doneAt` is
+  stamped server-side).
+- `ts` maps field names to last-write timestamps — conflict resolution is
+  last-write-wins per field; you can ignore it when reading.
+- `attachments`: `{url, name, isImage}` — https URLs only; files themselves
+  live on Uploadcare, not in Skrami.
+- The in-app JSON export is exactly this Board object.
+
+## Writing: ops
+
+Send:
+
+    {"t":"ops","ops":[{"cid":"<your cid>","seq":1,"ts":1723200000000,"op":{...}}]}
+
+Envelope rules:
+
+- `seq`: strictly increasing per cid, starting above the snapshot's `yourSeq`.
+  An op with a stale seq is dropped SILENTLY.
+- `ts`: epoch milliseconds (your current time; the server clamps it). It is the
+  last-write-wins tiebreak per field.
+- ≤ 500 envelopes per message.
+- The server echoes every applied op back to everyone INCLUDING you:
+  the echo is your ack. No echo = dropped (stale seq or failed validation).
+- Ops are idempotent absolute writes ("set column to X"), never relative
+  ("move left"), so retries are safe.
+- An op referencing a missing target (create a task in a story someone just
+  deleted) is accepted and echoed but changes nothing — trust the snapshot +
+  echoes, not your intent.
+
+## Op catalog
+
+IDs for things you create are client-generated: any string ≤ 64 chars, UUIDs
+recommended. Limits: title ≤ 2000 chars, note ≤ 4096 (plain text, URLs get
+auto-linked), assignee ≤ 120, column name ≤ 60, ≤ 10 attachments each
+(https URL ≤ 600 chars), orderKey ≤ 64. Over-long text is truncated.
+
+    {"t":"story.create","id","title","orderKey"}
+    {"t":"story.set","id","set":{title?,note?,attachments?}}
+    {"t":"story.move","id","orderKey"}
+    {"t":"story.del","id"}                    // also deletes the row's tasks
+
+    {"t":"task.create","id","storyId","column","title","assignee",
+     "priority":false,"note":"","attachments":[],"orderKey"}
+    {"t":"task.set","id","set":{title?,note?,assignee?,priority?,attachments?}}
+    {"t":"task.move","id","storyId","column","orderKey"}
+    {"t":"task.del","id"}
+
+    {"t":"col.add","id","name","index"}       // id must not be "done"
+    {"t":"col.set","id","name"}
+    {"t":"col.move","id","index"}
+    {"t":"col.del","id"}                      // refused for todo/inprog or non-empty
+
+    {"t":"board.setName","name"}              // becomes the URL flavor: must match
+                                              // ^[a-z0-9]([a-z0-9-]{0,48}[a-z0-9])?$
+    {"t":"board.del"}                         // DELETES THE BOARD (30-day grace)
+
+DESTRUCTIVE OPS — `board.del`, `story.del`, `col.del`, and mass `task.del`
+remove other people's work. Send them only when a human explicitly asked for
+that exact action. The same goes for the `setPassword` / `removePassword`
+WebSocket messages, which exist but are not an agent's business.
+
+## Ordering (orderKey)
+
+Stories (and tasks within a cell) sort by `orderKey` as plain strings, ties
+broken by id. To position an item, pick any string that sorts strictly between
+its neighbors, using chars `0-9A-Za-z`, never ending in `0`:
+
+- first item ever: `"V"`
+- append after last key `"z"`: `"zV"`
+- between `"a0V"` and `"a0X"`: `"a0W"`
+
+## Presence — be a visible teammate
+
+After hello, announce yourself:
+
+    {"t":"presence","name":"Claude"}          // name ≤ 60 chars
+
+You appear in the board's presence roster like any human. Set `assignee` on
+cards you create to your name — cards are colored by assignee, so your work is
+visibly yours. While editing an existing task, optionally send
+`{"t":"editing","id":"<taskId>"}` (and later `{"t":"editing","id":null}`) so
+humans see an "is editing" badge and don't collide with you.
+
+## Password-protected boards
+
+If the snapshot never arrives and you get `{"t":"authRequired"}` (close code
+4003), the board has a password. Exchange it for a token:
+
+    POST https://skrami.app/b/<id>/auth
+    {"password":"..."}
+
+    200 {"token":"..."}     // put it in the hello: {"t":"hello",...,"token":"..."}
+    403 {"error":"wrong"}
+    429 {"retryAfter":N}    // exponential backoff after 3 misses — do NOT retry blind
+
+Tokens are long-lived but rotate when someone changes the password — on
+authRequired, re-auth once with the password you were given.
+
+## Creating a board
+
+Generate a 7-char id from the alphabet above, then just connect and send ops —
+a board persists the moment it receives its first op. (Humans do the same by
+clicking "Create board"; empty boards are never stored.)
+
+## Recipes
+
+Read a board (Node ≥ 22, no dependencies — also works in Deno/Bun/browsers):
+
+    const ws = new WebSocket("wss://skrami.app/b/<id>/ws");
+    ws.onopen = () => ws.send(JSON.stringify({t:"hello", cid:"my-agent", v:0, pending:[]}));
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.t === "snapshot") { console.log(JSON.stringify(m.board)); ws.close(); }
+    };
+
+One-shot write, single round trip: put your envelopes in `pending` of the hello
+itself — they are applied before the snapshot is taken, so the snapshot you get
+back confirms your write. Remember: if you reuse a cid, seqs must keep growing;
+after storage loss, reconnect once with `pending:[]`, read `yourSeq`, continue
+from there.
+
+Live collaboration: keep the socket open, apply incoming `ops` to your local
+copy of the board, send `ping` every ~10 s.
+
+## Stability
+
+This document describes the live protocol as of 2026-08-09 and is updated with
+it. The protocol is small and stable, but not versioned — if a message you
+receive has a `t` you don't know, ignore it.
