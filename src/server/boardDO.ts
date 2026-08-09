@@ -83,15 +83,9 @@ export class BoardDO extends DurableObject<Env> {
       this.send(ws, { t: "deleted" });
       ws.close(4001, "deleted");
     }
+    // a password-only board has nothing to soft-delete — purge is the only meaningful takedown
     if (purge || !this.board) {
-      await this.ctx.storage.deleteAll();
-      await this.ctx.storage.deleteAlarm();
-      this.board = null;
-      this.version = 0;
-      this.seqs.clear();
-      this.auth = null;
-      this.fail = { count: 0, until: 0 };
-      this.stored = false;
+      await this.purgeStorage();
       return json({ purged: true });
     }
     this.board.deletedAt = Date.now();
@@ -290,18 +284,23 @@ export class BoardDO extends DurableObject<Env> {
     );
   }
 
+  // Drops the tables entirely and disarms the alarm — the id becomes fully reusable.
+  private async purgeStorage(): Promise<void> {
+    await this.ctx.storage.deleteAll();
+    await this.ctx.storage.deleteAlarm();
+    this.board = null;
+    this.version = 0;
+    this.seqs.clear();
+    this.auth = null;
+    this.fail = { count: 0, until: 0 };
+    this.stored = false;
+  }
+
   async alarm(): Promise<void> {
     this.load();
     if (!this.stored) return;
     if (this.board?.deletedAt && Date.now() - this.board.deletedAt > PURGE_AFTER) {
-      await this.ctx.storage.deleteAll();
-      await this.ctx.storage.deleteAlarm();
-      this.board = null;
-      this.version = 0;
-      this.seqs.clear();
-      this.auth = null;
-      this.fail = { count: 0, until: 0 };
-      this.stored = false;
+      await this.purgeStorage();
       return;
     }
     if (this.board) {
