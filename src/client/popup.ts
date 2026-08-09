@@ -138,6 +138,16 @@ export function openPopup(o: PopupOpts): void {
     void addFiles(dropped);
   });
 
+  // ⌘V with a screenshot or a Finder-copied file lands like a drop; text pastes stay native
+  function onPaste(e: ClipboardEvent): void {
+    const pasted = [...(e.clipboardData?.files ?? [])];
+    if (!pasted.length) return;
+    e.preventDefault();
+    if (!uploadcareKey) return askForKey();
+    void addFiles(pasted);
+  }
+  document.addEventListener("paste", onPaste);
+
   async function addFiles(chosen: File[]): Promise<void> {
     const room = ATTACHMENTS_MAX - attachments.length;
     if (room <= 0) return renderFiles(`Up to ${ATTACHMENTS_MAX} attachments.`);
@@ -374,6 +384,7 @@ export function openPopup(o: PopupOpts): void {
   function close(): void {
     current = null;
     document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("paste", onPaste);
     overlay.remove();
     pop.remove();
     o.onOpenChange?.(null);
