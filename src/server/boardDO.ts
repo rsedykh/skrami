@@ -266,7 +266,7 @@ export class BoardDO extends DurableObject<Env> {
     this.stored = true;
     void this.ctx.storage.setAlarm(Date.now() + DAY);
     // operator's creation log — DO namespaces can't be enumerated by name, this KV list is the only registry
-    void this.env.REGISTRY.put(id, new Date().toISOString()).catch(() => {});
+    void this.env.REGISTRY.put(id, `${new Date().toISOString()} https://skrami.app/b/${id}`).catch(() => {});
   }
 
   private persistBoard(): void {
