@@ -20,10 +20,17 @@ export default {
       return Response.redirect(new URL("/", url).toString(), 302);
     }
     // operator kill-switch (abuse/DMCA): inert until the ADMIN_KEY secret is set; 404 hides it from probing
-    if (sub === "/takedown" && (!env.ADMIN_KEY || req.headers.get("authorization") !== `Bearer ${env.ADMIN_KEY}`))
+    if (sub === "/takedown" && (!env.ADMIN_KEY || !timingSafeEq(req.headers.get("authorization") ?? "", `Bearer ${env.ADMIN_KEY}`)))
       return new Response("Not found", { status: 404 });
     if (sub) return env.BOARD.get(env.BOARD.idFromName(id)).fetch(new Request(new URL(`/b/${id}${sub}`, url), req));
     // extensionless: the asset layer 307s "/board.html" away from under us
     return env.ASSETS.fetch(new Request(new URL("/board", url), req));
   },
 } satisfies ExportedHandler<Env>;
+
+// credentials don't get compared with ===: early-exit string equality leaks timing
+function timingSafeEq(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  return ea.byteLength === eb.byteLength && crypto.subtle.timingSafeEqual(ea, eb);
+}
