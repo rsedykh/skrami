@@ -75,7 +75,7 @@ export class BoardDO extends DurableObject<Env> {
     const salt = btoa(String.fromCharCode(...saltBytes));
     this.auth = { salt, hash: await hashPassword(password, salt), token: crypto.randomUUID() };
     this.fail = { count: 0, until: 0 };
-    this.ensureStorage();
+    this.ensureStorage((ws.deserializeAttachment() as Attachment).id);
     this.persistAuth();
     this.persistFail();
     // only the setter gets the fresh token — every other device re-auths at its next connect
@@ -192,7 +192,7 @@ export class BoardDO extends DurableObject<Env> {
     if (applied.length) {
       if (this.board === null) board.createdAt = board.createdAt || now;
       this.board = board;
-      this.ensureStorage();
+      this.ensureStorage(board.id);
       this.persistBoard();
     }
     return applied;
@@ -228,13 +228,15 @@ export class BoardDO extends DurableObject<Env> {
   }
 
   // A board hits storage only once it has an op or a password — empty boards persist nothing.
-  private ensureStorage(): void {
+  private ensureStorage(id: string): void {
     if (this.stored) return;
     const sql = this.ctx.storage.sql;
     sql.exec("CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT)");
     sql.exec("CREATE TABLE IF NOT EXISTS snapshots (day TEXT PRIMARY KEY, data TEXT)");
     this.stored = true;
     void this.ctx.storage.setAlarm(Date.now() + DAY);
+    // operator's creation log — DO namespaces can't be enumerated by name, this KV list is the only registry
+    void this.env.REGISTRY.put(id, new Date().toISOString()).catch(() => {});
   }
 
   private persistBoard(): void {
