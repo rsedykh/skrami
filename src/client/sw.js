@@ -22,7 +22,8 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
+  // media streams in byte ranges — the Cache API rejects 206s, so leave those to the browser
+  if (req.method !== "GET" || req.headers.has("range") || new URL(req.url).origin !== location.origin) return;
   e.respondWith(
     fetch(req)
       .then((res) => {
