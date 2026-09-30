@@ -455,6 +455,7 @@ td.cell.empty:hover::after { content: "+"; color: var(--muted); opacity: .5; fon
   font-size: 17px; font-weight: 700; padding: 13px 30px; border-radius: 9px;
 }
 .createboard:hover { background: #83bf86; }
+.promo { display: block; width: 100%; height: auto; margin-top: 30px; border-radius: 10px; box-shadow: var(--shadow); background: var(--cell); }
 .index section { margin-top: 38px; }
 .index h2 { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0 0 12px; }
 .index p, .index li { color: var(--soft); font-size: 14.5px; line-height: 1.65; }
