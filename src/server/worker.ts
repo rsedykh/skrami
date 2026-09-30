@@ -1,4 +1,5 @@
 import { boardIdFrom } from "../shared/id";
+import { byteRange } from "./range";
 
 export { BoardDO } from "./boardDO";
 
@@ -6,7 +7,10 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     const m = url.pathname.match(/^\/b\/([^/]+)(\/(?:ws|auth|takedown))?$/);
-    if (!m) return env.ASSETS.fetch(req);
+    if (!m) {
+      if (url.pathname === "/promo.mp4") return byteRange(await env.ASSETS.fetch(req), req.method === "GET" ? req.headers.get("range") : null);
+      return env.ASSETS.fetch(req);
+    }
 
     const [, seg, sub] = m;
     // identity is the trailing token; the flavor words before it are ignored
